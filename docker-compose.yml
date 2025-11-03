@@ -1,0 +1,58 @@
+version: "3.9"
+
+services:
+  mydb:
+    container_name: ${DB_CONTAINER_NAME}
+    image: ${DB_IMAGE}
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+    ports:
+      - "${DB_PORT}:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ${DB_VOLUME}:/var/lib/mysql
+    networks:
+      - datastore
+
+  be-app:
+    container_name: ${BE_CONTAINER_NAME}
+    build:
+      context: ./DataStore
+      dockerfile: Dockerfile
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://${DB_CONTAINER_NAME}:3306/${MYSQL_DATABASE}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${MYSQL_USER}
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    depends_on:
+      mydb:
+        condition: service_healthy
+    ports:
+      - "${BE_PORT}:8084"
+    networks:
+      - datastore
+
+  fe-app:
+    container_name: ${FE_CONTAINER_NAME}
+    build:
+      context: ./DataStoreFront
+      dockerfile: Dockerfile-frontend
+    environment:
+      API_URL: http://${BE_CONTAINER_NAME}:8084
+    depends_on:
+      - be-app
+    ports:
+      - "${FE_PORT}:8080"
+    networks:
+      - datastore
+
+networks:
+  datastore:
+    driver: bridge
+
+volumes:
+  mysql_data:
